@@ -95,7 +95,7 @@ sync
 echo ""
 echo ""
 echo "#########################################################"
-echo "#    WebCamE2PrenjSF INSTALLED SUCCESSFULLY          #"
+echo "#       WebCamE2PrenjSF INSTALLED SUCCESSFULLY          #"
 echo "#                  developed by ciefp                   #"
 echo "#                   Big thanks Qu4k3                    #"
 echo "#                  .::ciefpsettings::.                  #"
