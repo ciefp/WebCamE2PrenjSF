@@ -4,6 +4,10 @@
 ![Bouquet](https://github.com/ciefp/WebcamE2PrenjSF/blob/main/webcamprenjsf_1.jpg)
 
 ![Bouquet](https://github.com/ciefp/WebcamE2PrenjSF/blob/main/webcamprenjsf_2.jpg)
+
+![Bouquet](https://github.com/ciefp/WebcamE2PrenjSF/blob/main/webcamprenjsf_3.jpg)
+
+![Bouquet](https://github.com/ciefp/WebcamE2PrenjSF/blob/main/webcamprenjsf_4.jpg)
 # ...:: WebCamE2PrenjSF v1.1 ::...
 
 ## 📦 What's new in version 1.2
