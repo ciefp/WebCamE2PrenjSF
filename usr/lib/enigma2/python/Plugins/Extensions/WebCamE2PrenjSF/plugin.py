@@ -24,7 +24,7 @@ plugin_path = os.path.dirname(os.path.abspath(__file__))
 if plugin_path not in sys.path:
     sys.path.append(plugin_path)
 
-PLUGIN_VERSION = "1.1"
+PLUGIN_VERSION = "1.2"
 PLUGIN_NAME = "WebCamE2PrenjSF"
 PLUGIN_DESC = "WebCam for userbouquet enigma2 Satelitski Forum @prenj"
 PLUGIN_ICON = "/usr/lib/enigma2/python/Plugins/Extensions/WebCamE2PrenjSF/icon.png"
@@ -37,7 +37,11 @@ DEFAULT_SETTINGS = {
     'quality': '1080',
     'mini_skin_opacity': '50',
     'player_type': '4097',
-    'webcam_timeout': 20
+    'webcam_timeout': 20,
+    'youtube_timeout_mode': 'fixed',  # 'fixed' ili 'variable'
+    'youtube_timeout_min': 15,
+    'youtube_timeout_max': 30,
+    'youtube_timeout_step': 5
 }
 
 def load_settings():
@@ -91,6 +95,22 @@ def get_mini_skin_opacity():
 def get_webcam_timeout():
     settings = load_settings()
     return int(settings.get('webcam_timeout', 20))
+
+def get_youtube_timeout_mode():
+    settings = load_settings()
+    return settings.get('youtube_timeout_mode', 'fixed')
+
+def get_youtube_timeout_min():
+    settings = load_settings()
+    return int(settings.get('youtube_timeout_min', 15))
+
+def get_youtube_timeout_max():
+    settings = load_settings()
+    return int(settings.get('youtube_timeout_max', 30))
+
+def get_youtube_timeout_step():
+    settings = load_settings()
+    return int(settings.get('youtube_timeout_step', 5))
 
 def log_broken_link(url, title, error_msg=""):
     """Loguje neispravan link u fajl"""
@@ -256,7 +276,7 @@ class WebCamE2PrenjSF(Screen):
             <eLabel position="0,0" size="1920,100" backgroundColor="#1a1a1a" zPosition="-1" />
             <eLabel text=":: WebCamE2 Satelitski Forum - Prenj Ciefp ::" position="60,25" size="900,50" font="Regular;40" foregroundColor="#ffffff" backgroundColor="#00000000" transparent="1" />
 
-            <widget name="menu" position="60,150" size="800,600" scrollbarMode="showOnDemand" itemHeight="50" font="Regular;26" foregroundColor="#ffffff" backgroundColor="#1a1a1a" zPosition="2" />
+            <widget name="camera_list" position="60,150" size="800,600" scrollbarMode="showOnDemand" itemHeight="50" font="Regular;26" foregroundColor="#ffffff" backgroundColor="#1a1a1a" zPosition="2" />
 
             <widget name="logo" position="900,150" size="1000,600" zPosition="1" alphatest="on" />
 
@@ -278,6 +298,9 @@ class WebCamE2PrenjSF(Screen):
 
             <eLabel position="755,1015" size="30,30" backgroundColor="blue" zPosition="2" />
             <eLabel text="LOGVIEWER" position="795,1010" size="200,40" font="Regular;30" foregroundColor="#ffffff" backgroundColor="#1a1a1a" transparent="1" zPosition="2" />
+            <!-- ORANGE - MENU (DODATO) -->
+            <eLabel position="1000,1015" size="30,30" backgroundColor="#FF8C00" zPosition="2" />
+            <eLabel text="RELOAD" position="1045,1010" size="150,40" font="Regular;30" foregroundColor="#ffffff" backgroundColor="#1a1a1a" transparent="1" zPosition="2" />
         </screen>"""
 
     def __init__(self, session):
@@ -289,13 +312,13 @@ class WebCamE2PrenjSF(Screen):
         self.menu_list = []
         self.display_list = []
         self.playlist = []
-        self["menu"] = MenuList(self.menu_list)
+        self["camera_list"] = MenuList(self.menu_list)
         self["status"] = Label("Click GREEN:DOWNLOAD to download and install")
         self["version"] = Label("")
         self.webcam_mode = True
         self.bouquet_version = ""
         
-        self["actions"] = ActionMap(["OkCancelActions", "SetupActions", "ColorActions"],
+        self["actions"] = ActionMap(["OkCancelActions", "SetupActions", "ColorActions", "MenuActions"],
         {
             "ok": self.okClicked,
             "cancel": self.close,
@@ -303,8 +326,9 @@ class WebCamE2PrenjSF(Screen):
             "green": self.download_and_install,
             "yellow": self.openSettings,
             "blue": self.openLogViewer,
-            "down": self["menu"].down,
-            "up": self["menu"].up
+            "menu": self.reload_from_local,
+            "down": self["camera_list"].down,
+            "up": self["camera_list"].up
         }, -1)
         
         self.onLayoutFinish.append(self.set_logo)
@@ -314,6 +338,54 @@ class WebCamE2PrenjSF(Screen):
     def openLogViewer(self):
         """Otvara LogViewerScreen za pregled broken linkova"""
         self.session.open(LogViewerScreen, BROKEN_LINKS_LOG)
+
+    def reload_from_local(self):
+        """Reload playlist from local userbouquet file without downloading from GitHub"""
+        try:
+            bouquet_path = "/etc/enigma2/userbouquet.web_cam____prenj___.tv"
+            if not os.path.exists(bouquet_path):
+                self.session.open(MessageBox,
+                                  "Bouquet file not found!\n\nPlease download first using GREEN button.",
+                                  MessageBox.TYPE_ERROR, timeout=5)
+                return
+
+            # Pročitaj verziju iz lokalnog fajla
+            try:
+                with open(bouquet_path, "r", encoding="utf-8", errors="ignore") as f:
+                    first_line = f.readline().strip()
+                if first_line.startswith("#NAME"):
+                    local_version = first_line[6:].strip()
+                else:
+                    local_version = "Unknown"
+            except:
+                local_version = "Unknown"
+
+            # Reload playlist
+            self.load_playlist()
+
+            # Ažuriraj verziju na ekranu
+            self.bouquet_version = local_version
+            self["version"].setText(local_version)
+
+            # Prikaži poruku o uspehu
+            self.session.open(MessageBox,
+                              "Local bouquet reloaded successfully!\n\n"
+                              "Version: {}\n"
+                              "Cameras: {}\n"
+                              "Categories: {}".format(
+                                  local_version,
+                                  len(self.playlist),
+                                  len([x for x in self.display_list if x.get('is_marker', False)])
+                              ),
+                              MessageBox.TYPE_INFO, timeout=5)
+
+            self["status"].setText("Reloaded from local file - Version: {}".format(local_version))
+
+        except Exception as e:
+            print("[WebCamE2PrenjSF] Reload local error: {}".format(e))
+            self.session.open(MessageBox,
+                              "Error reloading local bouquet:\n{}".format(str(e)),
+                              MessageBox.TYPE_ERROR, timeout=5)
 
     def load_playlist(self):
         """Load the playlist from the bouquet file and populate menu"""
@@ -440,7 +512,7 @@ class WebCamE2PrenjSF(Screen):
 
                 i += 1
 
-            self["menu"].setList(self.menu_list)
+            self["camera_list"].setList(self.menu_list)
             self["status"].setText("Loaded {} cameras, {} categories. Press OK to play.".format(
                 len(self.playlist),
                 len([x for x in self.display_list if x.get('is_marker', False)])
@@ -457,7 +529,7 @@ class WebCamE2PrenjSF(Screen):
             self["status"].setText("No cameras in playlist. Click GREEN to download.")
             return
             
-        current_idx = self["menu"].getSelectedIndex()
+        current_idx = self["camera_list"].getSelectedIndex()
         if current_idx is None or current_idx < 0:
             current_idx = 0
             
@@ -489,7 +561,7 @@ class WebCamE2PrenjSF(Screen):
 
         # Pokupimo selektovani mod i indeks pre nego što se ChoiceBox zatvori
         mode = answer[1]
-        current_idx = self["menu"].getSelectedIndex()
+        current_idx = self["camera_list"].getSelectedIndex()
 
         def openPlayerPostponed():
             if mode == "single":
@@ -663,31 +735,40 @@ class WebCamE2PrenjSFSettings(Screen, ConfigListScreen):
             <eLabel text="Save" position="290,740" size="100,40" font="Regular;26" foregroundColor="#ffffff" backgroundColor="#00000000" transparent="1" zPosition="2" />
         </screen>
     """
-    
+
     def __init__(self, session):
         Screen.__init__(self, session)
         self.session = session
         self.settings = load_settings()
-        self.setup_config()
-        
+
+        # Inicijalizuj listu PRVO
         self.list = []
+
+        # Onda podesi konfiguraciju
+        self.setup_config()
+
+        # Tek onda dodaj sve u listu
         self.list.append(getConfigListEntry("Video Quality:", self.quality_entry))
         self.list.append(getConfigListEntry("Mini Skin Opacity:", self.mini_opacity_entry))
         self.list.append(getConfigListEntry("Media Player Type:", self.player_entry))
         self.list.append(getConfigListEntry("Webcam Auto-Switch Timeout:", self.webcam_timeout_entry))
-        
+        self.list.append(getConfigListEntry("YouTube Timeout Mode:", self.youtube_timeout_mode_entry))
+        self.list.append(getConfigListEntry("YouTube Min Timeout:", self.youtube_timeout_min_entry))
+        self.list.append(getConfigListEntry("YouTube Max Timeout:", self.youtube_timeout_max_entry))
+        self.list.append(getConfigListEntry("YouTube Step Size:", self.youtube_timeout_step_entry))
+
         ConfigListScreen.__init__(self, self.list, session=self.session, on_change=self.changedEntry)
-        
+
         self["actions"] = ActionMap(["SetupActions", "ColorActions"],
-        {
-            "cancel": self.cancel,
-            "red": self.cancel,
-            "green": self.save,
-            "ok": self.save
-        }, -1)
-        
+                                    {
+                                        "cancel": self.cancel,
+                                        "red": self.cancel,
+                                        "green": self.save,
+                                        "ok": self.save
+                                    }, -1)
+
         self.setTitle("WebCamE2 Settings")
-        
+
     def setup_config(self):
         self.quality_choices = [
             ("best", "Best Available (4K/8K)"),
@@ -695,62 +776,107 @@ class WebCamE2PrenjSFSettings(Screen, ConfigListScreen):
             ("1080", "Full HD (1080p)"),
             ("720", "HD Ready (720p)")
         ]
-        
+
         self.mini_opacity_choices = [
             ("100", "100%"), ("90", "90%"), ("80", "80%"), ("70", "70%"),
             ("60", "60%"), ("50", "50% (Default)"), ("40", "40%"),
             ("30", "30%"), ("20", "20%"), ("10", "10%"), ("0", "0%")
         ]
-        
+
         self.player_choices = [
             ("4097", "GStreamer Media Player (Recommended)"),
             ("5002", "DVB Player (Original)"),
             ("5001", "Exteplayer3 (if installed ServiceApp)"),
             ("movieplayer", "MoviePlayer (Single play only)"),
         ]
-        
+
         self.webcam_timeout_choices = [
             ("15", "15 seconds"),
             ("20", "20 seconds"),
             ("25", "25 seconds"),
             ("30", "30 seconds"),
-            ("45", "45 seconds"),
+            ("40", "40 seconds"),
+            ("50", "50 seconds"),
             ("60", "60 seconds"),
             ("70", "70 seconds"),
             ("80", "80 seconds"),
             ("90", "90 seconds"),
         ]
-        
+
         self.quality_entry = ConfigSelection(
             choices=self.quality_choices,
             default=self.settings.get('quality', '1080')
         )
-        
+
         self.mini_opacity_entry = ConfigSelection(
             choices=self.mini_opacity_choices,
             default=self.settings.get('mini_skin_opacity', '50')
         )
-        
+
         self.player_entry = ConfigSelection(
             choices=self.player_choices,
             default=self.settings.get('player_type', '4097')
         )
-        
+
         self.webcam_timeout_entry = ConfigSelection(
             choices=self.webcam_timeout_choices,
             default=str(self.settings.get('webcam_timeout', 20))
         )
-    
+
+        self.youtube_timeout_mode_choices = [
+            ("fixed", "Fixed timeout (same for all)"),
+            ("variable", "Variable timeout (YouTube only)")
+        ]
+
+        self.youtube_timeout_min_choices = [
+            ("10", "10 seconds"), ("15", "15 seconds"), ("20", "20 seconds"),
+            ("25", "25 seconds"), ("30", "30 seconds"), ("35", "35 seconds")
+        ]
+
+        self.youtube_timeout_max_choices = [
+            ("20", "20 seconds"), ("25", "25 seconds"), ("30", "30 seconds"),
+            ("35", "35 seconds"), ("40", "40 seconds"), ("45", "45 seconds"),
+            ("50", "50 seconds"), ("60", "60 seconds")
+        ]
+
+        self.youtube_timeout_step_choices = [
+            ("5", "5 seconds"), ("10", "10 seconds"), ("15", "15 seconds")
+        ]
+
+        self.youtube_timeout_mode_entry = ConfigSelection(
+            choices=self.youtube_timeout_mode_choices,
+            default=self.settings.get('youtube_timeout_mode', 'fixed')
+        )
+
+        self.youtube_timeout_min_entry = ConfigSelection(
+            choices=self.youtube_timeout_min_choices,
+            default=str(self.settings.get('youtube_timeout_min', 15))
+        )
+
+        self.youtube_timeout_max_entry = ConfigSelection(
+            choices=self.youtube_timeout_max_choices,
+            default=str(self.settings.get('youtube_timeout_max', 30))
+        )
+
+        self.youtube_timeout_step_entry = ConfigSelection(
+            choices=self.youtube_timeout_step_choices,
+            default=str(self.settings.get('youtube_timeout_step', 5))
+        )
+
     def changedEntry(self):
         pass
-    
+
     def save(self):
         try:
             self.settings['quality'] = self.quality_entry.value
             self.settings['mini_skin_opacity'] = self.mini_opacity_entry.value
             self.settings['player_type'] = self.player_entry.value
             self.settings['webcam_timeout'] = int(self.webcam_timeout_entry.value)
-            
+            self.settings['youtube_timeout_mode'] = self.youtube_timeout_mode_entry.value
+            self.settings['youtube_timeout_min'] = int(self.youtube_timeout_min_entry.value)
+            self.settings['youtube_timeout_max'] = int(self.youtube_timeout_max_entry.value)
+            self.settings['youtube_timeout_step'] = int(self.youtube_timeout_step_entry.value)
+
             if save_settings(self.settings):
                 self.session.open(MessageBox, "Settings saved successfully!", MessageBox.TYPE_INFO, timeout=3)
                 self.close()
@@ -759,7 +885,7 @@ class WebCamE2PrenjSFSettings(Screen, ConfigListScreen):
         except Exception as e:
             print("[WebCamE2PrenjSFSettings] Save error: {}".format(e))
             self.session.open(MessageBox, "Error saving settings: {}".format(str(e)), MessageBox.TYPE_ERROR, timeout=5)
-    
+
     def cancel(self):
         self.close()
 
@@ -791,13 +917,13 @@ class CiefpWebcamPlaylistPlayer(Screen):
         <screen position="0,0" size="1920,160" title="WebCam Player" backgroundColor="#ff000000" flags="wfNoBorder">
             <eLabel position="0,0" size="1920,160" backgroundColor="#{}00000e" zPosition="1" />
             <eLabel text="NOW PLAYING:" position="50,20" size="180,40" font="Regular;22" foregroundColor="#ffffff" backgroundColor="#00000000" transparent="1" zPosition="2" />
-            <widget name="title" position="240,15" size="1630,50" font="Regular;30" foregroundColor="#ffffff" backgroundColor="#{}00000e" transparent="1" zPosition="2" />
+            <widget name="title" position="260,15" size="1630,50" font="Regular;30" foregroundColor="#ffffff" backgroundColor="#{}00000e" transparent="1" zPosition="2" />
             <eLabel text="NEXT:" position="50,75" size="180,40" font="Regular;20" foregroundColor="#ffffff" backgroundColor="#00000000" transparent="1" zPosition="2" />
-            <widget name="next_title" position="240,72" size="1200,40" font="Regular;24" foregroundColor="#ffcc00" backgroundColor="#{}00000e" transparent="1" zPosition="2" />
+            <widget name="next_title" position="260,72" size="1200,40" font="Regular;24" foregroundColor="#ffcc00" backgroundColor="#{}00000e" transparent="1" zPosition="2" />
             <widget name="playlist_info" position="50,120" size="300,30" font="Regular;22" foregroundColor="#00ffcc" backgroundColor="transparent" transparent="1" zPosition="2" />
-            <widget name="bouquet_version" position="800,20" size="1000,30" font="Regular;24" halign="right" foregroundColor="#ffffff" backgroundColor="transparent" transparent="1" zPosition="2" />
+            <widget name="bouquet_version" position="900,20" size="1000,30" font="Regular;24" halign="right" foregroundColor="#ffffff" backgroundColor="transparent" transparent="1" zPosition="2" />
             <widget name="status" position="900,120" size="500,30" font="Regular;22" halign="right" foregroundColor="#ffcc00" backgroundColor="transparent" transparent="1" zPosition="2" />    
-            <widget name="controls" position="240,120" size="700,30" font="Regular;22" foregroundColor="#03fc1c" backgroundColor="#{}00000e" transparent="1" zPosition="2" />
+            <widget name="controls" position="260,120" size="700,30" font="Regular;22" foregroundColor="#03fc1c" backgroundColor="#{}00000e" transparent="1" zPosition="2" />
             <widget name="time" position="1600,110" size="300,50" font="Regular;36" halign="right" foregroundColor="#ffffff" backgroundColor="transparent" transparent="1" zPosition="2"/>
         </screen>
         """.format(alpha_hex, alpha_hex, alpha_hex, alpha_hex)
@@ -829,6 +955,11 @@ class CiefpWebcamPlaylistPlayer(Screen):
         self.time_timer = eTimer()
         self.time_timer.callback.append(self.updateTime)
         self.time_timer.start(1000)
+        self.current_youtube_timeout = 15  # Početna vrednost
+        self.youtube_timeout_mode = get_youtube_timeout_mode()
+        self.youtube_timeout_min = get_youtube_timeout_min()
+        self.youtube_timeout_max = get_youtube_timeout_max()
+        self.youtube_timeout_step = get_youtube_timeout_step()
 
         self.onLayoutFinish.append(self.startExtraction)
 
@@ -883,12 +1014,10 @@ class CiefpWebcamPlaylistPlayer(Screen):
         # Za single play sa movieplayer
         if self.is_single_play and player_type == "movieplayer":
             print("[WebcamPlayer] Single play with MoviePlayer")
-            # Ako je YouTube, prvo ekstraktuj pa onda pusti u MoviePlayer
             if is_youtube:
                 print("[WebcamPlayer] YouTube with MoviePlayer - extracting first")
                 threading.Thread(target=self.extractYouTubeForMoviePlayer, args=(url, title), daemon=True).start()
             else:
-                # Za m3u8 direktno u MoviePlayer
                 self.movie_player_timer = eTimer()
                 self.movie_player_timer.callback.append(lambda: self.playWithMoviePlayer(url, title))
                 self.movie_player_timer.start(200, True)
@@ -1058,6 +1187,17 @@ class CiefpWebcamPlaylistPlayer(Screen):
 
             # Pokreni auto-switch timer ako nije single play
             if not self.is_single_play:
+                # Proveri da li je YouTube i da li je varijabilni mod uključen
+                current_video = self.playlist[self.index]
+                is_youtube = current_video.get('is_youtube', False)
+
+                if is_youtube and self.youtube_timeout_mode == 'variable':
+                    # Generiši novi tajmer za YouTube
+                    self.generate_youtube_timeout()
+                else:
+                    # Koristi fiksni tajmer za m3u8 ili fixed mod
+                    self.webcam_timeout = get_webcam_timeout()
+
                 self.start_auto_switch_timer()
 
         except Exception as e:
@@ -1076,6 +1216,22 @@ class CiefpWebcamPlaylistPlayer(Screen):
 
         self.countdown = self.webcam_timeout
 
+        # Proveri da li je trenutna kamera YouTube
+        current_video = self.playlist[self.index]
+        is_youtube = current_video.get('is_youtube', False)
+
+        # Ažuriraj kontrolnu poruku
+        if is_youtube and self.youtube_timeout_mode == 'variable':
+            timeout_label = "VAR: {}s".format(self.webcam_timeout)
+        else:
+            timeout_label = "{}s".format(self.webcam_timeout)
+
+        try:
+            self["controls"].setText(
+                "WEBCAM | Auto-switch: {} | OK: Pause | Up/Down: Skip | EXIT: Exit".format(timeout_label))
+        except:
+            pass
+
         self.countdown_timer = eTimer()
         self.countdown_timer.callback.append(self.update_countdown)
         self.countdown_timer.start(1000)
@@ -1083,6 +1239,19 @@ class CiefpWebcamPlaylistPlayer(Screen):
         self.auto_switch_timer = eTimer()
         self.auto_switch_timer.callback.append(self.auto_switch_callback)
         self.auto_switch_timer.start(self.webcam_timeout * 1000, True)
+
+    def generate_youtube_timeout(self):
+        """Generiše varijabilni tajmer za YouTube kamere"""
+        if self.youtube_timeout_mode == 'variable':
+            # Generiši nasumičnu vrednost između min i max sa korakom
+            import random
+            steps = int((self.youtube_timeout_max - self.youtube_timeout_min) / self.youtube_timeout_step)
+            random_step = random.randint(0, steps)
+            self.webcam_timeout = self.youtube_timeout_min + (random_step * self.youtube_timeout_step)
+
+            print("[WebcamPlayer] YouTube variable timeout: {}s".format(self.webcam_timeout))
+        else:
+            self.webcam_timeout = get_webcam_timeout()
 
     def update_countdown(self):
         if getattr(self, 'is_closed', True) or self.is_paused or self.is_loading or self.is_single_play:

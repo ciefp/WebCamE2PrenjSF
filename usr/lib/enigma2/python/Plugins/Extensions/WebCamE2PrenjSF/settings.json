@@ -2,5 +2,9 @@
     "quality": "1080",
     "mini_skin_opacity": "30",
     "player_type": "movieplayer",
-    "webcam_timeout": 20
+    "webcam_timeout": 20,
+    "youtube_timeout_mode": "fixed",
+    "youtube_timeout_min": 15,
+    "youtube_timeout_max": 40,
+    "youtube_timeout_step": 5
 }
