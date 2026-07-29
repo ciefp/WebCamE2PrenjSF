@@ -24,11 +24,11 @@ plugin_path = os.path.dirname(os.path.abspath(__file__))
 if plugin_path not in sys.path:
     sys.path.append(plugin_path)
 
-PLUGIN_VERSION = "1.2"
+PLUGIN_VERSION = "1.3"
 PLUGIN_NAME = "WebCamE2PrenjSF"
 PLUGIN_DESC = "WebCam for userbouquet enigma2 Satelitski Forum @prenj"
 PLUGIN_ICON = "/usr/lib/enigma2/python/Plugins/Extensions/WebCamE2PrenjSF/icon.png"
-PLUGIN_LOGO = "/usr/lib/enigma2/python/Plugins/Extensions/WebCamE2PrenjSF/logo.png"
+PLUGIN_LOGO = "/usr/lib/enigma2/python/Plugins/Extensions/WebCamE2PrenjSF/logoprenj.png"
 SETTINGS_FILE = "/usr/lib/enigma2/python/Plugins/Extensions/WebCamE2PrenjSF/settings.json"
 BROKEN_LINKS_LOG = "/tmp/webcam_broken_links.log"
 
@@ -147,25 +147,42 @@ else:
 
 
 class LogViewerScreen(Screen):
-    """Screen za pregled log fajla sa skrolovanjem"""
+    """Screen za pregled log fajla sa skrolovanjem - FHD verzija"""
     skin = """
-        <screen position="center,center" size="1600,1000" title="Broken Links Log Viewer" backgroundColor="#228B22" flags="wfNoBorder">
-            <eLabel position="0,0" size="1600,80" backgroundColor="#1a1a1a" zPosition="1" />
-            <eLabel text="BROKEN LINKS LOG" position="30,20" size="600,50" font="Regular;32" foregroundColor="#ffcc00" backgroundColor="#00000000" transparent="1" zPosition="2" />
+        <screen position="center,center" size="1920,1080" title="Broken Links Log Viewer" backgroundColor="#228B22" flags="wfNoBorder">
+            <!-- Pozadina -->
+            <eLabel position="0,0" size="1920,1080" backgroundColor="#0a1a0a" zPosition="-1" />
 
-            <widget name="log_text" position="20,100" size="1560,800" font="Regular;24" foregroundColor="#ffffff" backgroundColor="#1a1a1a" halign="left" valign="top" transparent="0" />
+            <!-- Gornji header -->
+            <eLabel position="0,0" size="1920,80" backgroundColor="#1a1a1a" zPosition="1" />
+            <eLabel text="BROKEN LINKS LOG" position="40,20" size="600,50" font="Regular;34" foregroundColor="#ffcc00" backgroundColor="#00000000" transparent="1" zPosition="2" />
 
-            <eLabel position="0,920" size="1600,80" backgroundColor="#1a1a1a" zPosition="1" />
-            <widget name="info" position="20,930" size="1000,50" font="Regular;24" foregroundColor="#00ffcc" backgroundColor="#00000000" transparent="1" halign="left" zPosition="2" />
+            <!-- Linija ispod headera -->
+            <eLabel position="0,80" size="1920,2" backgroundColor="#ffcc00" zPosition="1" />
 
-            <eLabel position="1200,935" size="50,50" backgroundColor="#ff0000" zPosition="2" />
-            <eLabel text="EXIT" position="1270,930" size="100,50" font="Regular;28" foregroundColor="#ffffff" backgroundColor="#00000000" transparent="1" zPosition="2" />
+            <!-- Log tekst -->
+            <widget name="log_text" position="40,100" size="1840,850" font="Regular;26" foregroundColor="#ffffff" backgroundColor="#0a1a0a" halign="left" valign="top" transparent="0" />
+            <widget name="separator2" position="0,955" size="1920,3" backgroundColor="#d5fa02" zPosition="1" /> 
+            <!-- Donji footer -->
+            <eLabel position="0,960" size="1920,120" backgroundColor="#1a1a1a" zPosition="1" />
 
-            <eLabel position="1400,935" size="50,50" backgroundColor="#00ff00" zPosition="2" />
-            <eLabel text="CLEAR" position="1470,930" size="120,50" font="Regular;28" foregroundColor="#ffffff" backgroundColor="#00000000" transparent="1" zPosition="2" />
+            <!-- Info linija -->
+            <widget name="info" position="40,970" size="1200,50" font="Regular;24" foregroundColor="#00ffcc" backgroundColor="#00000000" transparent="1" halign="left" zPosition="2" />
 
-            <eLabel text="▲" position="1550,110" size="40,40" font="Regular;30" foregroundColor="#ffcc00" backgroundColor="#00000000" transparent="1" halign="center" zPosition="2" />
-            <eLabel text="▼" position="1550,850" size="40,40" font="Regular;30" foregroundColor="#ffcc00" backgroundColor="#00000000" transparent="1" halign="center" zPosition="2" />
+            <!-- Red dugme (EXIT) -->
+            <eLabel position="1500,975" size="50,50" backgroundColor="#ff0000" zPosition="2" />
+            <eLabel text="EXIT" position="1570,970" size="100,50" font="Regular;28" foregroundColor="#ffffff" backgroundColor="#00000000" transparent="1" zPosition="2" />
+
+            <!-- Green dugme (CLEAR) -->
+            <eLabel position="1720,975" size="50,50" backgroundColor="#00ff00" zPosition="2" />
+            <eLabel text="CLEAR" position="1790,970" size="120,50" font="Regular;28" foregroundColor="#ffffff" backgroundColor="#00000000" transparent="1" zPosition="2" />
+
+            <!-- Scroll strelice -->
+            <eLabel text="▲" position="1850,120" size="40,40" font="Regular;32" foregroundColor="#ffcc00" backgroundColor="#00000000" transparent="1" halign="center" zPosition="2" />
+            <eLabel text="▼" position="1850,900" size="40,40" font="Regular;32" foregroundColor="#ffcc00" backgroundColor="#00000000" transparent="1" halign="center" zPosition="2" />
+
+            <!-- Donja linija -->
+            <eLabel position="0,1078" size="1920,2" backgroundColor="#ffcc00" zPosition="1" />
         </screen>
     """
 
@@ -176,6 +193,7 @@ class LogViewerScreen(Screen):
 
         self["log_text"] = Label("")
         self["info"] = Label("")
+        self["separator2"] = Label()
 
         self["actions"] = ActionMap(["SetupActions", "DirectionActions", "ColorActions"], {
             "cancel": self.close,
@@ -191,7 +209,8 @@ class LogViewerScreen(Screen):
 
         self.scroll_position = 0
         self.lines = []
-        self.max_lines_on_screen = 28
+        # Povećan broj linija za FHD (veći ekran)
+        self.max_lines_on_screen = 32
 
         self.load_log_content()
 
@@ -272,7 +291,7 @@ class LogViewerScreen(Screen):
 
 class WebCamE2PrenjSF(Screen):
     skin = """
-        <screen position="0,0" size="1920,1080" title="CiefpYouTube" backgroundColor="#228B22" flags="wfNoBorder">
+        <screen position="center,center" size="1920,1080" title="CiefpYouTube" backgroundColor="#228B22" flags="wfNoBorder">
             <eLabel position="0,0" size="1920,100" backgroundColor="#1a1a1a" zPosition="-1" />
             <eLabel text=":: WebCamE2 Satelitski Forum - Prenj Ciefp ::" position="60,25" size="900,50" font="Regular;40" foregroundColor="#ffffff" backgroundColor="#00000000" transparent="1" />
 
@@ -721,21 +740,24 @@ class WebCamE2PrenjSF(Screen):
 
 class WebCamE2PrenjSFSettings(Screen, ConfigListScreen):
     """Settings screen for WebCamE2PrenjSF plugin"""
-    
     skin = """
-        <screen position="center,center" size="1200,800" title="WebCamE2 Settings" backgroundColor="#228B22">
-            <eLabel position="0,0" size="1200,80" backgroundColor="#1a1a1a" zPosition="-1" />
-            <eLabel text="WebCamE2 Settings" position="30,15" size="1200,50" font="Regular;34" foregroundColor="#ffffff" backgroundColor="#1a1a1a" transparent="1" />
-            <widget name="config" position="100,90" size="1000,620" scrollbarMode="showOnDemand" />
-            
-            <eLabel position="0,730" size="1200,70" backgroundColor="#1a1a1a" zPosition="1" />
-            <eLabel position="30,745" size="30,30" backgroundColor="red" zPosition="2" />
-            <eLabel text="Exit" position="70,740" size="100,40" font="Regular;26" foregroundColor="#ffffff" backgroundColor="#00000000" transparent="1" zPosition="2" />
-            <eLabel position="250,745" size="30,30" backgroundColor="green" zPosition="2" />
-            <eLabel text="Save" position="290,740" size="100,40" font="Regular;26" foregroundColor="#ffffff" backgroundColor="#00000000" transparent="1" zPosition="2" />
+        <screen position="center,center" size="1920,1080" backgroundColor="#011a2e">
+            <widget name="separator0" position="0,5" size="1920,3" backgroundColor="#d5fa02" zPosition="1" />  
+            <widget name="plugin_title" position="0,10" size="1920,60" font="Bold;30" halign="center" backgroundColor="#012e01" foregroundColor="#FFFFFF" text="..:: WebcamE2 Settings ::.." />
+            <widget name="separator1" position="0,75" size="1920,3" backgroundColor="#d5fa02" zPosition="1" /> 
+
+            <!-- CONFIG WIDGET - DODATI font i itemHeight -->
+            <widget name="config" position="200,90" size="1400,820" font="Regular;26" itemHeight="45" scrollbarMode="showOnDemand" backgroundColor="#012e01"/>
+
+            <widget name="separator2" position="0,927" size="1920,3" backgroundColor="#d5fa02" zPosition="1" /> 
+            <eLabel position="0,930" size="1920,70" backgroundColor="#1a1a1a" zPosition="1" />
+            <eLabel position="30,945" size="30,30" backgroundColor="red" zPosition="2" />
+            <eLabel text="Exit" position="70,940" size="100,40" font="Regular;26" foregroundColor="#ffffff" backgroundColor="#00000000" transparent="1" zPosition="2" />
+            <eLabel position="250,945" size="30,30" backgroundColor="green" zPosition="2" />
+            <eLabel text="Save" position="290,940" size="100,40" font="Regular;26" foregroundColor="#ffffff" backgroundColor="#00000000" transparent="1" zPosition="2" />
+            <widget name="separator3" position="0,1000" size="1920,3" backgroundColor="#d5fa02" zPosition="1" /> 
         </screen>
     """
-
     def __init__(self, session):
         Screen.__init__(self, session)
         self.session = session
@@ -759,6 +781,13 @@ class WebCamE2PrenjSFSettings(Screen, ConfigListScreen):
 
         ConfigListScreen.__init__(self, self.list, session=self.session, on_change=self.changedEntry)
 
+        # Separatori
+        self["separator0"] = Label()
+        self["separator1"] = Label()
+        self["separator2"] = Label()
+        self["separator3"] = Label()
+        self["plugin_title"] = Label("..:: WebCamE2PrenjSF ::..")
+
         self["actions"] = ActionMap(["SetupActions", "ColorActions"],
                                     {
                                         "cancel": self.cancel,
@@ -767,7 +796,6 @@ class WebCamE2PrenjSFSettings(Screen, ConfigListScreen):
                                         "ok": self.save
                                     }, -1)
 
-        self.setTitle("WebCamE2 Settings")
 
     def setup_config(self):
         self.quality_choices = [
@@ -914,7 +942,7 @@ class CiefpWebcamPlaylistPlayer(Screen):
         # Skin
         alpha_hex = get_mini_skin_opacity()
         self.skin = """
-        <screen position="0,0" size="1920,160" title="WebCam Player" backgroundColor="#ff000000" flags="wfNoBorder">
+        <screen position="center,0" size="1920,160" title="WebCam Player" backgroundColor="#ff000000" flags="wfNoBorder">
             <eLabel position="0,0" size="1920,160" backgroundColor="#{}00000e" zPosition="1" />
             <eLabel text="NOW PLAYING:" position="50,20" size="180,40" font="Regular;22" foregroundColor="#ffffff" backgroundColor="#00000000" transparent="1" zPosition="2" />
             <widget name="title" position="260,15" size="1630,50" font="Regular;30" foregroundColor="#ffffff" backgroundColor="#{}00000e" transparent="1" zPosition="2" />
