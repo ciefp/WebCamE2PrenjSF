@@ -24,7 +24,7 @@ plugin_path = os.path.dirname(os.path.abspath(__file__))
 if plugin_path not in sys.path:
     sys.path.append(plugin_path)
 
-PLUGIN_VERSION = "1.3"
+PLUGIN_VERSION = "1.4"
 PLUGIN_NAME = "WebCamE2PrenjSF"
 PLUGIN_DESC = "WebCam for userbouquet enigma2 Satelitski Forum @prenj"
 PLUGIN_ICON = "/usr/lib/enigma2/python/Plugins/Extensions/WebCamE2PrenjSF/icon.png"
@@ -319,7 +319,7 @@ class WebCamE2PrenjSF(Screen):
             <eLabel text="LOGVIEWER" position="795,1010" size="200,40" font="Regular;30" foregroundColor="#ffffff" backgroundColor="#1a1a1a" transparent="1" zPosition="2" />
             <!-- ORANGE - MENU (DODATO) -->
             <eLabel position="1000,1015" size="30,30" backgroundColor="#FF8C00" zPosition="2" />
-            <eLabel text="RELOAD" position="1045,1010" size="150,40" font="Regular;30" foregroundColor="#ffffff" backgroundColor="#1a1a1a" transparent="1" zPosition="2" />
+            <eLabel text="MENU:RELOAD" position="1045,1010" size="300,40" font="Regular;30" foregroundColor="#ffffff" backgroundColor="#1a1a1a" transparent="1" zPosition="2" />
         </screen>"""
 
     def __init__(self, session):
@@ -422,7 +422,6 @@ class WebCamE2PrenjSF(Screen):
                 lines = [line.strip() for line in f.readlines()]
 
             current_category = ""
-
             i = 0
             while i < len(lines):
                 line = lines[i]
@@ -431,116 +430,127 @@ class WebCamE2PrenjSF(Screen):
                     i += 1
                     continue
 
-                # Prepoznaj markere (kategorije)
-                if line.startswith("#SERVICE 1:64:") or "===" in line or line.startswith("#DESCRIPTION"):
+                # 1. Prepoznavanje kategorija / markera
+                if line.startswith("#SERVICE 1:64:") or "===" in line:
                     if i + 1 < len(lines) and lines[i + 1].startswith("#DESCRIPTION"):
                         current_category = lines[i + 1].replace("#DESCRIPTION", "").strip()
-                    elif line.startswith("#DESCRIPTION"):
-                        current_category = line.replace("#DESCRIPTION", "").strip()
-                    else:
-                        if "===" in line:
-                            parts = line.split("===")
-                            if len(parts) > 1:
-                                current_category = parts[1].strip()
+                        i += 1
+                    elif "===" in line:
+                        parts = line.split("===")
+                        if len(parts) > 1:
+                            current_category = parts[1].strip()
 
                     if current_category:
-                        display_name = current_category
                         self.display_list.append({
                             "is_marker": True,
-                            "name": display_name,
+                            "name": current_category,
                             "category": current_category
                         })
-                        self.menu_list.append(display_name)
+                        self.menu_list.append(current_category)
 
-                    i += 2
+                    i += 1
                     continue
 
-                # Parsiraj SERVICE linije (4097 i 5002)
+                # 2. Parsiranje SERVICE linija (4097 i 5002)
                 if line.startswith("#SERVICE 4097:") or line.startswith("#SERVICE 5002:"):
-                    parts = line.split(':')
+                    servicetype = 4097 if line.startswith("#SERVICE 4097:") else 5002
+                    is_youtube = False
                     url = ""
                     name = ""
-                    servicetype = 4097 if "4097" in line else 5002
-                    is_youtube = False
 
-                    if len(parts) >= 12 and "4097" in line:
-                        raw_url = parts[10]
-                        name_raw = parts[11] if len(parts) > 11 else ""
-                        try:
-                            from urllib.parse import unquote
-                            url = unquote(raw_url)
-                            name = unquote(name_raw)
-                        except:
-                            url = raw_url.replace("%3a", ":").replace("%2f", "/")
-                            name = name_raw.replace("%20", " ")
-                    elif len(parts) >= 11 and "5002" in line:
-                        raw_url = parts[-1]
-                        try:
-                            from urllib.parse import unquote
-                            url = unquote(raw_url)
-                        except:
-                            url = raw_url.replace("%3a", ":").replace("%2f", "/")
+                    # Ukloni prefiks #SERVICE XXXX:0:1:0:0:0:0:0:0:0:
+                    prefix_len = 15  # dužina "#SERVICE 5002:" ili "#SERVICE 4097:"
+                    raw_content = line[prefix_len:].strip()
 
-                    # Proveri da li je YouTube link (YT-DLP://)
-                    if url.startswith("YT-DLP://"):
+                    # Preskoči standardne Enigma2 '0:1:0:0:0:0:0:0:0:' parametre
+                    parts = raw_content.split(':', 9)
+                    if len(parts) == 10:
+                        payload = parts[9]
+                    else:
+                        payload = raw_content
+
+                    # Sređivanje slucajeva gde je naziv unutar same SERVICE linije (npr. URL:Naziv)
+                    if "http" in payload and ":" in payload:
+                        # Ako postoji naziv iza URL-a (razdvojen dvotačkom)
+                        url_and_name = payload.split(':', 1)
+                        # Proveri da li je dvotačka deo http:// ili http%3a//
+                        if payload.startswith("http%3a//") or payload.startswith("https%3a//") or payload.startswith(
+                                "http://") or payload.startswith("https://"):
+                            # Nađi gde počinje sledeća dvotačka koja nije deo protokola
+                            clean_payload = payload.replace("%3a", ":").replace("%3A", ":")
+                            p_parts = clean_payload.split(":")
+                            # http : // domain / path : Name
+                            if len(p_parts) > 3 and not p_parts[-1].startswith("//"):
+                                name = p_parts[-1].strip()
+                                raw_url = ":".join(p_parts[:-1])
+                            else:
+                                raw_url = payload
+                        else:
+                            raw_url = payload
+                    else:
+                        raw_url = payload
+
+                    # Provera da li je YT-DLP
+                    if 'YT-DLP%3a//' in raw_url or 'YT-DLP://' in raw_url or 'YT-DLP%3A//' in raw_url:
                         is_youtube = True
-                        # Izvuci pravi YouTube URL
-                        youtube_url = url.replace("YT-DLP://", "")
-                        url = youtube_url
-                        print("[WebCamE2PrenjSF] YouTube link detected: {}".format(url))
+                        for prefix in ['YT-DLP%3a//', 'YT-DLP://', 'YT-DLP%3A//']:
+                            if prefix in raw_url:
+                                raw_url = raw_url.split(prefix)[-1]
+                                break
 
-                    if (not name or name == "Nepoznato") and i + 1 < len(lines) and lines[i + 1].startswith(
-                            "#DESCRIPTION"):
-                        desc_line = lines[i + 1]
-                        name = desc_line.replace("#DESCRIPTION", "").strip()
+                    # Dekodiranje URL-a
+                    try:
+                        from urllib.parse import unquote
+                        url = unquote(raw_url)
+                    except:
+                        url = raw_url.replace("%3a", ":").replace("%3A", ":").replace("%2f", "/").replace("%2F", "/")
+
+                    # Provera za YouTube
+                    if not is_youtube and is_youtube_url(url):
+                        is_youtube = True
+
+                    # Ako naziv nije bio u SERVICE liniji, proveri sledeći red (#DESCRIPTION)
+                    if not name and i + 1 < len(lines) and lines[i + 1].startswith("#DESCRIPTION"):
+                        name = lines[i + 1].replace("#DESCRIPTION", "").strip()
                         try:
                             from urllib.parse import unquote
                             name = unquote(name)
                         except:
-                            name = name.replace("%20", " ")
+                            pass
                         i += 1
 
-                    if not name and url:
-                        name = url.split('/')[-1].replace('.m3u8', '').replace('.ts', '').replace('_', ' ')
+                    # Fallback za naziv ako je i dalje prazan
+                    if not name:
+                        name = url.split('/')[-1].replace('.m3u8', '').replace('.ts', '')
                         if '?' in name:
                             name = name.split('?')[0]
 
+                    # Čišćenje i skraćivanje naziva
                     if len(name) > 80:
                         name = name[:77] + "..."
 
-                    if url and name:
-                        display_name = name
-                        self.display_list.append({
+                    # Dodavanje u liste samo ako je URL validan i nije marker
+                    if url:
+                        item_data = {
                             "is_marker": False,
-                            "name": display_name,
+                            "name": name,
                             "url": url,
                             "title": name,
                             "category": current_category,
                             "servicetype": servicetype,
                             "is_youtube": is_youtube
-                        })
-                        self.menu_list.append(display_name)
-
-                        self.playlist.append({
-                            "url": url,
-                            "title": name,
-                            "category": current_category,
-                            "servicetype": servicetype,
-                            "is_youtube": is_youtube
-                        })
+                        }
+                        self.display_list.append(item_data)
+                        self.menu_list.append(name)
+                        self.playlist.append(item_data)
 
                 i += 1
 
             self["camera_list"].setList(self.menu_list)
-            self["status"].setText("Loaded {} cameras, {} categories. Press OK to play.".format(
-                len(self.playlist),
-                len([x for x in self.display_list if x.get('is_marker', False)])
-            ))
+            self["status"].setText("Loaded {} cameras. Press OK to play.".format(len(self.playlist)))
 
         except Exception as e:
             print("[WebCamE2PrenjSF] Error loading playlist: {}".format(e))
-            import traceback
-            traceback.print_exc()
             self["status"].setText("Error loading playlist: {}".format(str(e)))
 
     def okClicked(self):
