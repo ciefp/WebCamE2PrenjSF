@@ -19,12 +19,12 @@ import subprocess
 import time
 from enigma import eTimer, eServiceReference
 
-# Add plugin directory to sys.path for Python 2 compatibility
+# Add plugin directory to sys.path for Python 2/3 compatibility
 plugin_path = os.path.dirname(os.path.abspath(__file__))
 if plugin_path not in sys.path:
     sys.path.append(plugin_path)
 
-PLUGIN_VERSION = "1.4"
+PLUGIN_VERSION = "1.5"
 PLUGIN_NAME = "WebCamE2PrenjSF"
 PLUGIN_DESC = "WebCam for userbouquet enigma2 Satelitski Forum @prenj"
 PLUGIN_ICON = "/usr/lib/enigma2/python/Plugins/Extensions/WebCamE2PrenjSF/icon.png"
@@ -38,7 +38,7 @@ DEFAULT_SETTINGS = {
     'mini_skin_opacity': '50',
     'player_type': '4097',
     'webcam_timeout': 20,
-    'youtube_timeout_mode': 'fixed',  # 'fixed' ili 'variable'
+    'youtube_timeout_mode': 'fixed',
     'youtube_timeout_min': 15,
     'youtube_timeout_max': 30,
     'youtube_timeout_step': 5
@@ -83,6 +83,15 @@ def get_video_format(quality):
         '720': 'bestvideo[height<=720]+bestaudio/best[height<=720]'
     }
     return format_map.get(quality, 'bestvideo[height<=1080]+bestaudio/best[height<=1080]')
+
+def get_streamlink_quality(quality):
+    quality_map = {
+        'best': 'best',
+        '2160': '2160p,4k,best',
+        '1080': '1080p,720p,best',
+        '720': '720p,480p,best'
+    }
+    return quality_map.get(quality, '1080p,best')
 
 def get_player_type():
     settings = load_settings()
@@ -150,38 +159,20 @@ class LogViewerScreen(Screen):
     """Screen za pregled log fajla sa skrolovanjem - FHD verzija"""
     skin = """
         <screen position="center,center" size="1920,1080" title="Broken Links Log Viewer" backgroundColor="#228B22" flags="wfNoBorder">
-            <!-- Pozadina -->
             <eLabel position="0,0" size="1920,1080" backgroundColor="#0a1a0a" zPosition="-1" />
-
-            <!-- Gornji header -->
             <eLabel position="0,0" size="1920,80" backgroundColor="#1a1a1a" zPosition="1" />
             <eLabel text="BROKEN LINKS LOG" position="40,20" size="600,50" font="Regular;34" foregroundColor="#ffcc00" backgroundColor="#00000000" transparent="1" zPosition="2" />
-
-            <!-- Linija ispod headera -->
             <eLabel position="0,80" size="1920,2" backgroundColor="#ffcc00" zPosition="1" />
-
-            <!-- Log tekst -->
             <widget name="log_text" position="40,100" size="1840,850" font="Regular;26" foregroundColor="#ffffff" backgroundColor="#0a1a0a" halign="left" valign="top" transparent="0" />
             <widget name="separator2" position="0,955" size="1920,3" backgroundColor="#d5fa02" zPosition="1" /> 
-            <!-- Donji footer -->
             <eLabel position="0,960" size="1920,120" backgroundColor="#1a1a1a" zPosition="1" />
-
-            <!-- Info linija -->
             <widget name="info" position="40,970" size="1200,50" font="Regular;24" foregroundColor="#00ffcc" backgroundColor="#00000000" transparent="1" halign="left" zPosition="2" />
-
-            <!-- Red dugme (EXIT) -->
             <eLabel position="1500,975" size="50,50" backgroundColor="#ff0000" zPosition="2" />
             <eLabel text="EXIT" position="1570,970" size="100,50" font="Regular;28" foregroundColor="#ffffff" backgroundColor="#00000000" transparent="1" zPosition="2" />
-
-            <!-- Green dugme (CLEAR) -->
             <eLabel position="1720,975" size="50,50" backgroundColor="#00ff00" zPosition="2" />
             <eLabel text="CLEAR" position="1790,970" size="120,50" font="Regular;28" foregroundColor="#ffffff" backgroundColor="#00000000" transparent="1" zPosition="2" />
-
-            <!-- Scroll strelice -->
             <eLabel text="▲" position="1850,120" size="40,40" font="Regular;32" foregroundColor="#ffcc00" backgroundColor="#00000000" transparent="1" halign="center" zPosition="2" />
             <eLabel text="▼" position="1850,900" size="40,40" font="Regular;32" foregroundColor="#ffcc00" backgroundColor="#00000000" transparent="1" halign="center" zPosition="2" />
-
-            <!-- Donja linija -->
             <eLabel position="0,1078" size="1920,2" backgroundColor="#ffcc00" zPosition="1" />
         </screen>
     """
@@ -209,7 +200,6 @@ class LogViewerScreen(Screen):
 
         self.scroll_position = 0
         self.lines = []
-        # Povećan broj linija za FHD (veći ekran)
         self.max_lines_on_screen = 32
 
         self.load_log_content()
@@ -303,8 +293,6 @@ class WebCamE2PrenjSF(Screen):
             <widget name="status" position="0,820" size="1920,50" font="Regular;24" halign="center" foregroundColor="#ffcc00" backgroundColor="#1a1a1a" transparent="1" zPosition="2" />
             <widget name="version" position="0,870" size="1920,50" font="Regular;24" halign="center" foregroundColor="#ffcc00" backgroundColor="#1a1a1a" transparent="1" zPosition="2" />
 
-
-            <!-- Colored buttons -->
             <eLabel position="0,980" size="1920,100" backgroundColor="#1a1a1a" zPosition="1" />
             <eLabel position="60,1015" size="30,30" backgroundColor="red" zPosition="2" />
             <eLabel text="EXIT"  position="105,1010" size="150,40" font="Regular;30" foregroundColor="#ffffff" backgroundColor="#1a1a1a" transparent="1" zPosition="2" />
@@ -317,7 +305,7 @@ class WebCamE2PrenjSF(Screen):
 
             <eLabel position="755,1015" size="30,30" backgroundColor="blue" zPosition="2" />
             <eLabel text="LOGVIEWER" position="795,1010" size="200,40" font="Regular;30" foregroundColor="#ffffff" backgroundColor="#1a1a1a" transparent="1" zPosition="2" />
-            <!-- ORANGE - MENU (DODATO) -->
+
             <eLabel position="1000,1015" size="30,30" backgroundColor="#FF8C00" zPosition="2" />
             <eLabel text="MENU:RELOAD" position="1045,1010" size="300,40" font="Regular;30" foregroundColor="#ffffff" backgroundColor="#1a1a1a" transparent="1" zPosition="2" />
         </screen>"""
@@ -355,11 +343,9 @@ class WebCamE2PrenjSF(Screen):
         self.onLayoutFinish.append(self.load_playlist)
 
     def openLogViewer(self):
-        """Otvara LogViewerScreen za pregled broken linkova"""
         self.session.open(LogViewerScreen, BROKEN_LINKS_LOG)
 
     def reload_from_local(self):
-        """Reload playlist from local userbouquet file without downloading from GitHub"""
         try:
             bouquet_path = "/etc/enigma2/userbouquet.web_cam____prenj___.tv"
             if not os.path.exists(bouquet_path):
@@ -368,7 +354,6 @@ class WebCamE2PrenjSF(Screen):
                                   MessageBox.TYPE_ERROR, timeout=5)
                 return
 
-            # Pročitaj verziju iz lokalnog fajla
             try:
                 with open(bouquet_path, "r", encoding="utf-8", errors="ignore") as f:
                     first_line = f.readline().strip()
@@ -379,14 +364,11 @@ class WebCamE2PrenjSF(Screen):
             except:
                 local_version = "Unknown"
 
-            # Reload playlist
             self.load_playlist()
 
-            # Ažuriraj verziju na ekranu
             self.bouquet_version = local_version
             self["version"].setText(local_version)
 
-            # Prikaži poruku o uspehu
             self.session.open(MessageBox,
                               "Local bouquet reloaded successfully!\n\n"
                               "Version: {}\n"
@@ -407,7 +389,6 @@ class WebCamE2PrenjSF(Screen):
                               MessageBox.TYPE_ERROR, timeout=5)
 
     def load_playlist(self):
-        """Load the playlist from the bouquet file and populate menu"""
         try:
             bouquet_path = "/etc/enigma2/userbouquet.web_cam____prenj___.tv"
             if not os.path.exists(bouquet_path):
@@ -430,7 +411,6 @@ class WebCamE2PrenjSF(Screen):
                     i += 1
                     continue
 
-                # 1. Prepoznavanje kategorija / markera
                 if line.startswith("#SERVICE 1:64:") or "===" in line:
                     if i + 1 < len(lines) and lines[i + 1].startswith("#DESCRIPTION"):
                         current_category = lines[i + 1].replace("#DESCRIPTION", "").strip()
@@ -451,35 +431,27 @@ class WebCamE2PrenjSF(Screen):
                     i += 1
                     continue
 
-                # 2. Parsiranje SERVICE linija (4097 i 5002)
                 if line.startswith("#SERVICE 4097:") or line.startswith("#SERVICE 5002:"):
                     servicetype = 4097 if line.startswith("#SERVICE 4097:") else 5002
                     is_youtube = False
+                    is_streamlink = False
                     url = ""
                     name = ""
 
-                    # Ukloni prefiks #SERVICE XXXX:0:1:0:0:0:0:0:0:0:
-                    prefix_len = 15  # dužina "#SERVICE 5002:" ili "#SERVICE 4097:"
+                    prefix_len = 15
                     raw_content = line[prefix_len:].strip()
 
-                    # Preskoči standardne Enigma2 '0:1:0:0:0:0:0:0:0:' parametre
                     parts = raw_content.split(':', 9)
                     if len(parts) == 10:
                         payload = parts[9]
                     else:
                         payload = raw_content
 
-                    # Sređivanje slucajeva gde je naziv unutar same SERVICE linije (npr. URL:Naziv)
                     if "http" in payload and ":" in payload:
-                        # Ako postoji naziv iza URL-a (razdvojen dvotačkom)
                         url_and_name = payload.split(':', 1)
-                        # Proveri da li je dvotačka deo http:// ili http%3a//
-                        if payload.startswith("http%3a//") or payload.startswith("https%3a//") or payload.startswith(
-                                "http://") or payload.startswith("https://"):
-                            # Nađi gde počinje sledeća dvotačka koja nije deo protokola
+                        if payload.startswith("http%3a//") or payload.startswith("https%3a//") or payload.startswith("http://") or payload.startswith("https://") or payload.startswith("streamlink%3a//") or payload.startswith("streamlink://"):
                             clean_payload = payload.replace("%3a", ":").replace("%3A", ":")
                             p_parts = clean_payload.split(":")
-                            # http : // domain / path : Name
                             if len(p_parts) > 3 and not p_parts[-1].startswith("//"):
                                 name = p_parts[-1].strip()
                                 raw_url = ":".join(p_parts[:-1])
@@ -490,7 +462,13 @@ class WebCamE2PrenjSF(Screen):
                     else:
                         raw_url = payload
 
-                    # Provera da li je YT-DLP
+                    if 'streamlink%3a//' in raw_url.lower() or 'streamlink://' in raw_url.lower():
+                        is_streamlink = True
+                        for prefix in ['streamlink%3a//', 'streamlink://', 'STREAMLINK%3A//', 'STREAMLINK://']:
+                            if prefix in raw_url:
+                                raw_url = raw_url.split(prefix)[-1]
+                                break
+
                     if 'YT-DLP%3a//' in raw_url or 'YT-DLP://' in raw_url or 'YT-DLP%3A//' in raw_url:
                         is_youtube = True
                         for prefix in ['YT-DLP%3a//', 'YT-DLP://', 'YT-DLP%3A//']:
@@ -498,18 +476,15 @@ class WebCamE2PrenjSF(Screen):
                                 raw_url = raw_url.split(prefix)[-1]
                                 break
 
-                    # Dekodiranje URL-a
                     try:
                         from urllib.parse import unquote
                         url = unquote(raw_url)
                     except:
                         url = raw_url.replace("%3a", ":").replace("%3A", ":").replace("%2f", "/").replace("%2F", "/")
 
-                    # Provera za YouTube
                     if not is_youtube and is_youtube_url(url):
                         is_youtube = True
 
-                    # Ako naziv nije bio u SERVICE liniji, proveri sledeći red (#DESCRIPTION)
                     if not name and i + 1 < len(lines) and lines[i + 1].startswith("#DESCRIPTION"):
                         name = lines[i + 1].replace("#DESCRIPTION", "").strip()
                         try:
@@ -519,17 +494,14 @@ class WebCamE2PrenjSF(Screen):
                             pass
                         i += 1
 
-                    # Fallback za naziv ako je i dalje prazan
                     if not name:
                         name = url.split('/')[-1].replace('.m3u8', '').replace('.ts', '')
                         if '?' in name:
                             name = name.split('?')[0]
 
-                    # Čišćenje i skraćivanje naziva
                     if len(name) > 80:
                         name = name[:77] + "..."
 
-                    # Dodavanje u liste samo ako je URL validan i nije marker
                     if url:
                         item_data = {
                             "is_marker": False,
@@ -538,7 +510,8 @@ class WebCamE2PrenjSF(Screen):
                             "title": name,
                             "category": current_category,
                             "servicetype": servicetype,
-                            "is_youtube": is_youtube
+                            "is_youtube": is_youtube,
+                            "is_streamlink": is_streamlink
                         }
                         self.display_list.append(item_data)
                         self.menu_list.append(name)
@@ -570,12 +543,6 @@ class WebCamE2PrenjSF(Screen):
         if selected_item.get('is_marker', False):
             return
             
-        playlist_index = 0
-        for i, cam in enumerate(self.playlist):
-            if cam['url'] == selected_item.get('url', ''):
-                playlist_index = i
-                break
-        
         choices = [
             ("Play this camera only", "single"),
             ("Play all cameras in sequence (WebCam Mode)", "playlist"),
@@ -588,7 +555,6 @@ class WebCamE2PrenjSF(Screen):
         if not answer:
             return
 
-        # Pokupimo selektovani mod i indeks pre nego što se ChoiceBox zatvori
         mode = answer[1]
         current_idx = self["camera_list"].getSelectedIndex()
 
@@ -601,9 +567,9 @@ class WebCamE2PrenjSF(Screen):
                             "url": item.get('url'),
                             "title": item.get('title'),
                             "servicetype": item.get('servicetype', 4097),
-                            "is_youtube": item.get('is_youtube', False)
+                            "is_youtube": item.get('is_youtube', False),
+                            "is_streamlink": item.get('is_streamlink', False)
                         }]
-                        # Otvaramo preko tvog plejera umesto direktnog MoviePlayer-a, prosleđujemo is_single_play=True ako tvoj plejer to podržava
                         self.session.open(CiefpWebcamPlaylistPlayer, single_playlist, 0, self.bouquet_version)
 
             elif mode == "playlist":
@@ -614,7 +580,6 @@ class WebCamE2PrenjSF(Screen):
                 if current_idx is not None and current_idx < len(self.display_list):
                     item = self.display_list[current_idx]
                     if not item.get('is_marker', False):
-                        # Pronalazimo indeks strima u playlisti na osnovu url-a
                         target_url = item.get('url', '')
                         start_index = 0
                         for i, cam in enumerate(self.playlist):
@@ -623,7 +588,6 @@ class WebCamE2PrenjSF(Screen):
                                 break
                         self.session.open(CiefpWebcamPlaylistPlayer, self.playlist, start_index, self.bouquet_version)
 
-        # eTimer osigurava da ChoiceBox nestane sa ekrana pre nego što bilo šta krene da se otvara
         from enigma import eTimer
         self.postpone_timer = eTimer()
         try:
@@ -749,14 +713,12 @@ class WebCamE2PrenjSF(Screen):
 
 
 class WebCamE2PrenjSFSettings(Screen, ConfigListScreen):
-    """Settings screen for WebCamE2PrenjSF plugin"""
     skin = """
         <screen position="center,center" size="1920,1080" backgroundColor="#011a2e">
             <widget name="separator0" position="0,5" size="1920,3" backgroundColor="#d5fa02" zPosition="1" />  
             <widget name="plugin_title" position="0,10" size="1920,60" font="Bold;30" halign="center" backgroundColor="#012e01" foregroundColor="#FFFFFF" text="..:: WebcamE2 Settings ::.." />
             <widget name="separator1" position="0,75" size="1920,3" backgroundColor="#d5fa02" zPosition="1" /> 
 
-            <!-- CONFIG WIDGET - DODATI font i itemHeight -->
             <widget name="config" position="200,90" size="1400,820" font="Regular;26" itemHeight="45" scrollbarMode="showOnDemand" backgroundColor="#012e01"/>
 
             <widget name="separator2" position="0,927" size="1920,3" backgroundColor="#d5fa02" zPosition="1" /> 
@@ -773,13 +735,9 @@ class WebCamE2PrenjSFSettings(Screen, ConfigListScreen):
         self.session = session
         self.settings = load_settings()
 
-        # Inicijalizuj listu PRVO
         self.list = []
-
-        # Onda podesi konfiguraciju
         self.setup_config()
 
-        # Tek onda dodaj sve u listu
         self.list.append(getConfigListEntry("Video Quality:", self.quality_entry))
         self.list.append(getConfigListEntry("Mini Skin Opacity:", self.mini_opacity_entry))
         self.list.append(getConfigListEntry("Media Player Type:", self.player_entry))
@@ -791,7 +749,6 @@ class WebCamE2PrenjSFSettings(Screen, ConfigListScreen):
 
         ConfigListScreen.__init__(self, self.list, session=self.session, on_change=self.changedEntry)
 
-        # Separatori
         self["separator0"] = Label()
         self["separator1"] = Label()
         self["separator2"] = Label()
@@ -805,7 +762,6 @@ class WebCamE2PrenjSFSettings(Screen, ConfigListScreen):
                                         "green": self.save,
                                         "ok": self.save
                                     }, -1)
-
 
     def setup_config(self):
         self.quality_choices = [
@@ -930,7 +886,6 @@ class WebCamE2PrenjSFSettings(Screen, ConfigListScreen):
 
 class CiefpWebcamPlaylistPlayer(Screen):
     def __init__(self, session, playlist, start_index=0, bouquet_version=""):
-        # Osnovne promenljive
         self.is_closed = False
         self.session = session
         self.playlist = playlist
@@ -949,7 +904,6 @@ class CiefpWebcamPlaylistPlayer(Screen):
         except:
             self.webcam_timeout = 30
 
-        # Skin
         alpha_hex = get_mini_skin_opacity()
         self.skin = """
         <screen position="center,0" size="1920,160" title="WebCam Player" backgroundColor="#ff000000" flags="wfNoBorder">
@@ -993,7 +947,7 @@ class CiefpWebcamPlaylistPlayer(Screen):
         self.time_timer = eTimer()
         self.time_timer.callback.append(self.updateTime)
         self.time_timer.start(1000)
-        self.current_youtube_timeout = 15  # Početna vrednost
+        self.current_youtube_timeout = 15
         self.youtube_timeout_mode = get_youtube_timeout_mode()
         self.youtube_timeout_min = get_youtube_timeout_min()
         self.youtube_timeout_max = get_youtube_timeout_max()
@@ -1028,6 +982,7 @@ class CiefpWebcamPlaylistPlayer(Screen):
         title = current_video.get('title', 'Camera')
         servicetype = current_video.get('servicetype', 4097)
         is_youtube = current_video.get('is_youtube', False)
+        is_streamlink = current_video.get('is_streamlink', False)
 
         try:
             self["title"].setText("Loading: {}...".format(title))
@@ -1049,11 +1004,12 @@ class CiefpWebcamPlaylistPlayer(Screen):
 
         player_type = get_player_type()
 
-        # Za single play sa movieplayer
+        # MoviePlayer radionica za single play
         if self.is_single_play and player_type == "movieplayer":
             print("[WebcamPlayer] Single play with MoviePlayer")
-            if is_youtube:
-                print("[WebcamPlayer] YouTube with MoviePlayer - extracting first")
+            if is_streamlink:
+                threading.Thread(target=self.extractStreamlinkStream, args=(url, title, True), daemon=True).start()
+            elif is_youtube:
                 threading.Thread(target=self.extractYouTubeForMoviePlayer, args=(url, title), daemon=True).start()
             else:
                 self.movie_player_timer = eTimer()
@@ -1061,26 +1017,78 @@ class CiefpWebcamPlaylistPlayer(Screen):
                 self.movie_player_timer.start(200, True)
             return
 
-        # ZA YOUTUBE - koristi yt-dlp za ekstrakciju (za playlist mod)
-        if is_youtube:
+        # STREAMLINK stream
+        if is_streamlink:
+            print("[WebcamPlayer] Streamlink stream detected: {}".format(title))
+            threading.Thread(target=self.extractStreamlinkStream, args=(url, title, False), daemon=True).start()
+        # YOUTUBE stream
+        elif is_youtube:
             print("[WebcamPlayer] YouTube stream detected: {}".format(title))
             threading.Thread(target=self.extractYouTubeStream, args=(url, title), daemon=True).start()
         else:
-            # Za m3u8 stream-ove direktno pusti
             print("[WebcamPlayer] Direct stream: {}".format(title))
             self.playVideoDirect(url, title, servicetype)
 
+    def extractStreamlinkStream(self, url, title, for_movie_player=False):
+        """Ekstrakcija strima pomoću Streamlink alata uz fallback na yt-dlp ako streamlink nedostaje"""
+        if getattr(self, 'is_closed', True):
+            return
+
+        quality = load_quality_setting()
+        sl_quality = get_streamlink_quality(quality)
+
+        print("[WebcamPlayer] Extracting Streamlink: {}".format(title))
+        print("[WebcamPlayer] URL: {}".format(url))
+        print("[WebcamPlayer] Quality: {}".format(sl_quality))
+
+        try:
+            cmd = ['streamlink', '--stream-url', url, sl_quality]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=45)
+
+            if result.returncode == 0 and result.stdout.strip():
+                video_url = result.stdout.strip().split('\n')[0]
+                print("[WebcamPlayer] Streamlink extracted successfully")
+                from twisted.internet import reactor
+                if for_movie_player:
+                    reactor.callFromThread(self.playWithMoviePlayer, video_url, title)
+                else:
+                    reactor.callFromThread(self.playVideoDirect, video_url, title, 5002)
+            else:
+                print("[WebcamPlayer] Streamlink extraction failed, trying yt-dlp fallback...")
+                if is_youtube_url(url):
+                    self.extractYouTubeStream(url, title)
+                else:
+                    from twisted.internet import reactor
+                    reactor.callFromThread(self.showError, "Streamlink extraction failed")
+
+        except (OSError, FileNotFoundError) as err:
+            print("[WebcamPlayer] Streamlink binary not found on system! Error: {}".format(err))
+            if is_youtube_url(url):
+                print("[WebcamPlayer] Falling back to yt-dlp for YouTube link...")
+                if for_movie_player:
+                    self.extractYouTubeForMoviePlayer(url, title)
+                else:
+                    self.extractYouTubeStream(url, title)
+            else:
+                from twisted.internet import reactor
+                reactor.callFromThread(self.showError, "Streamlink binary not installed")
+
+        except subprocess.TimeoutExpired:
+            print("[WebcamPlayer] Streamlink extraction timeout")
+            from twisted.internet import reactor
+            reactor.callFromThread(self.showError, "Streamlink timeout")
+        except Exception as e:
+            print("[WebcamPlayer] Streamlink error: {}".format(e))
+            log_broken_link(url, title, str(e)[:30])
+            from twisted.internet import reactor
+            reactor.callFromThread(self.showError, str(e)[:30])
+
     def extractYouTubeForMoviePlayer(self, url, title):
-        """Ekstrakcija YouTube stream-a za MoviePlayer (single play)"""
         if getattr(self, 'is_closed', True):
             return
 
         quality = load_quality_setting()
         video_format = get_video_format(quality)
-
-        print("[WebcamPlayer] Extracting YouTube for MoviePlayer: {}".format(title))
-        print("[WebcamPlayer] URL: {}".format(url))
-        print("[WebcamPlayer] Quality: {}".format(quality))
 
         try:
             cmd = ['yt-dlp', '-g', '-f', video_format, '--no-warnings', url]
@@ -1088,28 +1096,22 @@ class CiefpWebcamPlaylistPlayer(Screen):
 
             if result.returncode == 0 and result.stdout.strip():
                 video_url = result.stdout.strip().split('\n')[0]
-                print("[WebcamPlayer] YouTube extracted successfully for MoviePlayer")
                 from twisted.internet import reactor
                 reactor.callFromThread(self.playWithMoviePlayer, video_url, title)
             else:
-                print("[WebcamPlayer] YouTube extraction failed, trying fallback")
                 cmd_fallback = ['yt-dlp', '-g', '-f', 'best', '--no-warnings', url]
                 result_fallback = subprocess.run(cmd_fallback, capture_output=True, text=True, timeout=45)
                 if result_fallback.returncode == 0 and result_fallback.stdout.strip():
                     video_url = result_fallback.stdout.strip().split('\n')[0]
-                    print("[WebcamPlayer] YouTube fallback success for MoviePlayer")
                     from twisted.internet import reactor
                     reactor.callFromThread(self.playWithMoviePlayer, video_url, title)
                 else:
-                    print("[WebcamPlayer] YouTube all fallbacks failed for MoviePlayer")
                     from twisted.internet import reactor
                     reactor.callFromThread(self.showError, "Cannot extract YouTube stream")
         except subprocess.TimeoutExpired:
-            print("[WebcamPlayer] YouTube extraction timeout")
             from twisted.internet import reactor
             reactor.callFromThread(self.showError, "YouTube extraction timeout")
         except Exception as e:
-            print("[WebcamPlayer] YouTube extraction error: {}".format(e))
             log_broken_link(url, title, str(e)[:30])
             from twisted.internet import reactor
             reactor.callFromThread(self.showError, str(e)[:30])
@@ -1127,50 +1129,34 @@ class CiefpWebcamPlaylistPlayer(Screen):
             self.playVideoDirect(url, title, 4097)
 
     def extractYouTubeStream(self, url, title):
-        """Ekstrakcija YouTube stream URL-a pomocu yt-dlp"""
         if getattr(self, 'is_closed', True):
             return
 
         quality = load_quality_setting()
         video_format = get_video_format(quality)
 
-        print("[WebcamPlayer] Extracting YouTube: {}".format(title))
-        print("[WebcamPlayer] URL: {}".format(url))
-        print("[WebcamPlayer] Quality: {}".format(quality))
-        print("[WebcamPlayer] Format: {}".format(video_format))
-
         try:
-            # Koristi yt-dlp za ekstrakciju
             cmd = ['yt-dlp', '-g', '-f', video_format, '--no-warnings', url]
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=45)
 
             if result.returncode == 0 and result.stdout.strip():
                 video_url = result.stdout.strip().split('\n')[0]
-                print("[WebcamPlayer] YouTube extracted successfully")
-                print("[WebcamPlayer] Video URL: {}".format(video_url[:80]))
                 from twisted.internet import reactor
                 reactor.callFromThread(self.playVideoDirect, video_url, title, 5002)
             else:
-                print("[WebcamPlayer] YouTube extraction failed, trying fallback")
-                # Fallback na best
                 cmd_fallback = ['yt-dlp', '-g', '-f', 'best', '--no-warnings', url]
                 result_fallback = subprocess.run(cmd_fallback, capture_output=True, text=True, timeout=45)
                 if result_fallback.returncode == 0 and result_fallback.stdout.strip():
                     video_url = result_fallback.stdout.strip().split('\n')[0]
-                    print("[WebcamPlayer] YouTube fallback success")
                     from twisted.internet import reactor
                     reactor.callFromThread(self.playVideoDirect, video_url, title, 5002)
                 else:
-                    print("[WebcamPlayer] YouTube all fallbacks failed")
-                    print("[WebcamPlayer] Error: {}".format(result_fallback.stderr))
                     from twisted.internet import reactor
                     reactor.callFromThread(self.showError, "Cannot extract YouTube stream")
         except subprocess.TimeoutExpired:
-            print("[WebcamPlayer] YouTube extraction timeout")
             from twisted.internet import reactor
             reactor.callFromThread(self.showError, "YouTube extraction timeout")
         except Exception as e:
-            print("[WebcamPlayer] YouTube extraction error: {}".format(e))
             log_broken_link(url, title, str(e)[:30])
             from twisted.internet import reactor
             reactor.callFromThread(self.showError, str(e)[:30])
@@ -1180,40 +1166,24 @@ class CiefpWebcamPlaylistPlayer(Screen):
             return
 
         try:
-            print("[WebcamPlayer] Playing: {}".format(title))
-            print("[WebcamPlayer] URL: {}".format(video_url[:80] if len(video_url) > 80 else video_url))
-            print("[WebcamPlayer] Servicetype: {}".format(servicetype))
-
-            # Pokušaj prvo sa zadatim servicetype
             try:
                 ref = eServiceReference(servicetype, 0, video_url)
                 ref.setName(title)
                 self.session.nav.playService(ref)
-                print("[WebcamPlayer] Success with servicetype: {}".format(servicetype))
             except Exception as e1:
-                print("[WebcamPlayer] Error with servicetype {}: {}".format(servicetype, e1))
-                # Fallback 1: 4097
                 try:
-                    print("[WebcamPlayer] Fallback to 4097")
                     ref = eServiceReference(4097, 0, video_url)
                     ref.setName(title)
                     self.session.nav.playService(ref)
-                    print("[WebcamPlayer] Success with fallback 4097")
                 except Exception as e2:
-                    print("[WebcamPlayer] Fallback 4097 failed: {}".format(e2))
-                    # Fallback 2: 5002
                     try:
-                        print("[WebcamPlayer] Fallback to 5002")
                         ref = eServiceReference(5002, 0, video_url)
                         ref.setName(title)
                         self.session.nav.playService(ref)
-                        print("[WebcamPlayer] Success with fallback 5002")
                     except Exception as e3:
-                        print("[WebcamPlayer] All fallbacks failed: {}".format(e3))
                         log_broken_link(video_url, title, str(e3)[:30])
                         self.showError("Cannot play stream")
 
-            # Ažuriraj UI
             try:
                 self["title"].setText(title)
                 self["next_title"].setText(self.pending_next_title)
@@ -1223,17 +1193,13 @@ class CiefpWebcamPlaylistPlayer(Screen):
 
             self.is_loading = False
 
-            # Pokreni auto-switch timer ako nije single play
             if not self.is_single_play:
-                # Proveri da li je YouTube i da li je varijabilni mod uključen
                 current_video = self.playlist[self.index]
                 is_youtube = current_video.get('is_youtube', False)
 
                 if is_youtube and self.youtube_timeout_mode == 'variable':
-                    # Generiši novi tajmer za YouTube
                     self.generate_youtube_timeout()
                 else:
-                    # Koristi fiksni tajmer za m3u8 ili fixed mod
                     self.webcam_timeout = get_webcam_timeout()
 
                 self.start_auto_switch_timer()
@@ -1254,11 +1220,9 @@ class CiefpWebcamPlaylistPlayer(Screen):
 
         self.countdown = self.webcam_timeout
 
-        # Proveri da li je trenutna kamera YouTube
         current_video = self.playlist[self.index]
         is_youtube = current_video.get('is_youtube', False)
 
-        # Ažuriraj kontrolnu poruku
         if is_youtube and self.youtube_timeout_mode == 'variable':
             timeout_label = "VAR: {}s".format(self.webcam_timeout)
         else:
@@ -1279,15 +1243,11 @@ class CiefpWebcamPlaylistPlayer(Screen):
         self.auto_switch_timer.start(self.webcam_timeout * 1000, True)
 
     def generate_youtube_timeout(self):
-        """Generiše varijabilni tajmer za YouTube kamere"""
         if self.youtube_timeout_mode == 'variable':
-            # Generiši nasumičnu vrednost između min i max sa korakom
             import random
             steps = int((self.youtube_timeout_max - self.youtube_timeout_min) / self.youtube_timeout_step)
             random_step = random.randint(0, steps)
             self.webcam_timeout = self.youtube_timeout_min + (random_step * self.youtube_timeout_step)
-
-            print("[WebcamPlayer] YouTube variable timeout: {}s".format(self.webcam_timeout))
         else:
             self.webcam_timeout = get_webcam_timeout()
 
